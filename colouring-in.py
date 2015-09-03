@@ -7,7 +7,10 @@ from reportlab.pdfgen import canvas
 from reportlab.rl_config import defaultPageSize
 from reportlab.lib.units import inch
 from reportlab.lib.utils import ImageReader, getImageData
+from io import StringIO
+import numpy
 import cv2
+from skimage import io
 import requests
 import json
 
@@ -15,67 +18,132 @@ PAGE_HEIGHT = defaultPageSize[1]
 PAGE_WIDTH = defaultPageSize[0]
 style = getSampleStyleSheet
 
+vam_api = "http://www.vam.ac.uk/api/json/museumobject/"
+vam_images = "http://media.vam.ac.uk/media/thira/collection_images/"
+
+# from http://stackoverflow.com/questions/753052/strip-html-from-strings-in-python
+
+from html.parser import HTMLParser
+
+class MLStripper(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.reset()
+        self.strict = False
+        self.convert_charrefs= True
+        self.fed = []
+
+    def handle_data(self, d):
+        self.fed.append(d)
+
+    def get_data(self):
+        return ''.join(self.fed)
+
+def strip_tags(html):
+    s = MLStripper()
+    s.feed(html)
+    return s.get_data()
 # From http://stackoverflow.com/questions/5327670/image-aspect-ratio-using-reportlab-in-python
 
-def get_image_aspect(path):
-    img = ImageReader(path)
-    iw, ih = img.getSize()
-    aspect = ih / float(iw)
-    return (iw, ih, aspect)
+def get_image_aspect(img):
+    h, w = img.shape[:2]
+    aspect = h / float(w)
+    return (w, h, aspect)
 
 # ORIENTATION = LANDSCAPE, PORTRAIT
 
 class ColouringObject(object):
+    object = None
     canvas = None
     parts = []
     orientation = 'P'
 
     def __init__(self, obj="O122080", orientation="PORTRAIT"):
-            self.canvas = canvas.Canvas("O122080-colouring.pdf", pagesize=A4)
+            # TODO get data for obj
+            self.canvas = canvas.Canvas("%s-colouring.pdf" % obj, pagesize=A4)
+            self.obj = obj
 
             # self.canvas.setFont( V&A Font)
+
+    def getData(self):
+        obj_url = vam_api + self.obj
+        r = requests.get(obj_url)
+        data = r.json()
+        self.title = data[0]['fields']['title']
+        self.descriptive_line = data[0]['fields']['descriptive_line']
+        self.history_note = data[0]['fields']['history_note']
+        self.historical_context_note = strip_tags(data[0]['fields']['historical_context_note'])
+        self.place = data[0]['fields']['place']
+        self.artist = data[0]['fields']['artist']
+        self.object = data[0]['fields']['object']
+        self.pad = data[0]['fields']['public_access_description']
+        self.primary_image = data[0]['fields']['primary_image_id']
+        self.date = data[0]['fields']['date_text']
+
+# Download primary image
+        if self.primary_image:
+           img_url = vam_images + self.primary_image[0:6] + '/' + \
+                    self.primary_image + ".jpg"
+           print("DOwnloading image url: %s" % img_url)
+# oooh no error handling...
+#           r = requests.get(img_url)
+#           image = numpy.asarray(bytearray(r.content), dtype="uint8")
+#           self.image = cv2.imdecode(image, cv2.IMREAD_COLOR)
+           image = io.imread(img_url)
+           self.image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
 
     def save(self):
         self.canvas.showPage()
         self.canvas.save()
 
-    def edgeImage(self, name):
-        orig_img = cv2.imread(name, -1)
-        gray_img = cv2.cvtColor(orig_img, cv2.COLOR_BGR2GRAY)
+    def edgeImage(self):
+        gray_img = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
         edge_img = cv2.Canny(gray_img, 50, 200)
         cv2.threshold(edge_img, 1, 255, cv2.THRESH_BINARY, edge_img)
-        invert_img = None
+        (self.width, self.height, self.aspect) = get_image_aspect(edge_img)
         cv2.bitwise_not(edge_img, edge_img)
-        l = edge_img[:, :]
-        alpha_img = cv2.merge((l, l, l, l))
-        cv2.imwrite("edge-" + name, alpha_img)
-        self.image = "edge-" + name
+        cv2.imwrite("edge-" + self.obj + ".png", edge_img)
+# TODO do this in memory - can't pass it to reportlab though ?
+#        self.alpha_img = StringIO(str(cv2.imencode('.png', edge_img)[1]))
+#        invert_img = None
+#        l = edge_img[:, :]
+#        self.alpha_img = cv2.merge((l, l, l, l))
+#        cv2.imwrite("edge-" + name, alpha_img)
+#        self.image = "edge-" + name
 
     def drawImage(self):
         self.canvas.saveState()
-        (width, height, aspect) = get_image_aspect(self.image)
 # TODO make
-        if(abs(width-height) < 150):
+        if((self.width > self.height) or (abs(self.width-self.height) < 150)):
 # Rectangular / Landscape
-            scale_width = width * 0.7
-            scale_height = height * 0.7
-            self.canvas.drawImage(self.image, PAGE_WIDTH*0.2, PAGE_HEIGHT*0.3, width=scale_width, height=scale_height)
+            print("Landscape")
+            self.orientation = 'L'
+            scale_width = self.width * 0.7
+            scale_height = self.height * 0.7
+            self.canvas.drawImage("edge-" + self.obj + ".png", PAGE_WIDTH*0.05, PAGE_HEIGHT*0.45, width=scale_width, height=scale_height)
         else:
+            print("Width: %d Height %d" % (self.width, self.height))
 # Portrait
-            scale = height / float(PAGE_HEIGHT*0.7)
-            scale_width = (width * 0.7)
-            scale_height = PAGE_HEIGHT*0.7
-            self.canvas.drawImage(self.image, PAGE_WIDTH*0.1, PAGE_HEIGHT*0.2, width=(width * 0.7), height=PAGE_HEIGHT*0.7)
+            scale = self.height / float(PAGE_HEIGHT*0.7)
+            scale_width = (self.width * 0.5)
+            scale_height = PAGE_HEIGHT*0.5
+            self.canvas.drawImage("edge-" + self.obj + ".png", PAGE_WIDTH*0.1, PAGE_HEIGHT*0.2, width=(self.width * 0.5), height=PAGE_HEIGHT*0.5)
         self.canvas.restoreState()
 
     def drawPAD(self, pad=None, historical=None):
 # TODO - Choose PAD or other description. Limit length. Longer if image small
-        pad = "In contrast to the rich garnet-set jewellery of the earlier Anglo-Saxon period, finger rings of the ninth century are rarely adorned with precious stones. The skills of the goldsmith are seen in this example, where the different techniques of filigree and granulation are combined to produce an elaborately decorated ring."
-        historical = "Other than having been found in the moat, this ring has no known connection to Meaux Abbey, which was founded in 1150 by William le Gros. There appears to have been no preceding settlement recorded on the site, which was in the flood plain of the River Hull, marshy land and prone to flooding. In the ninth-century the site was within the boundaries of the Anglo-Saxon kingdom of Northumbria. It was a turbulent period for the region, with Viking raids in the first half of the century, which included the sacking of Beverley Abbey. The second half of the century saw the settlement of Danish invaders. The Anglo-Saxon Chronicle describes armies of 865 and 871 as \"great\" and says that they shared out the land in Northumbria.\nIn contrast to the rich garnet-set jewellery of the earlier Anglo-Saxon period, finger rings are rarely adorned with precious stones. Gold finger rings have been found amongst the grave goods of both male and female adults in Scandanavian and Anglo-Saxon burials. The decoration on the ring is Anglo-Saxon with what Oman terms viking influence. R.Jessup suggests that the animal decoration should be compared with that on the Alfred jewel and Ethelswith's ring. Alfred and Ethelswith were royalty of the kingdom of Wessex, however Ethelswith's ring (in common with the present example) was found in the West Riding of Yorkshire rather than Wessex.\"Styles common in Wessex, especially near Winchester, have been found in the Danelaw, and a mould for making this sort of jewellery has been found at York\" (Invisible Vikings - British Archaeology Magazine April 2002)."
+        if self.pad:
+            pad_text = self.pad
+        if self.historical_context_note:
+            hist_text = self.historical_context_note
+        else:
+            hist_text = None
+
         parastyle = ParagraphStyle('pad')
         parastyle.textColor = 'black'
         parastyle.fontSize = 10
-        paragraph = Paragraph(pad, parastyle)
+        paragraph = Paragraph(pad_text, parastyle)
 #        self.canvas.saveState()
 #        self.canvas.setFont('Times-Bold', 12)
 #        self.canvas.drawString(PAGE_WIDTH*0.1, PAGE_HEIGHT*0.1, pad)
@@ -83,24 +151,28 @@ class ColouringObject(object):
 #        paragraph.WrapOn(self.canvas, 
         paragraph.wrapOn(self.canvas, PAGE_WIDTH*0.9, PAGE_HEIGHT*0.1)
         paragraph.drawOn(self.canvas, PAGE_WIDTH*0.05, PAGE_HEIGHT*0.35)
-        parahist = Paragraph(historical, parastyle)
-        parahist.wrapOn(self.canvas, PAGE_WIDTH*0.9, PAGE_HEIGHT*0.2)
-        parahist.drawOn(self.canvas, PAGE_WIDTH*0.05, PAGE_HEIGHT*0.1)
+        if hist_text:
+            parahist = Paragraph(hist_text, parastyle)
+            parahist.wrapOn(self.canvas, PAGE_WIDTH*0.9, PAGE_HEIGHT*0.2)
+            parahist.drawOn(self.canvas, PAGE_WIDTH*0.05, PAGE_HEIGHT*0.1)
 
-    def drawTitle(self, title="Gold ring, with broad stirrup-shaped hoop, the shoulders ornamented with filigree and granulation in the form of dragon heads, the bezel a pellet of gold, Anglo Saxon, 800-900"):
+    def drawTitle(self):
 # Todo - max length / multilines. Use descriptive line if no title attrib
         self.canvas.saveState()
         self.canvas.setFont('Times-Bold', 12)
-        if len(title) > 32:
+        if self.title == '':
+            self.title = self.descriptive_line
+        if len(self.title) > 32:
             parastyle = ParagraphStyle('pad')
             parastyle.textColor = 'black'
             parastyle.fontSize = 12
-            paragraph = Paragraph(title, parastyle)
+            parastyle.font = 'Times-Bold'
+            paragraph = Paragraph(self.title, parastyle)
             paragraph.wrapOn(self.canvas, PAGE_WIDTH*0.75, PAGE_HEIGHT*0.75)
             paragraph.drawOn(self.canvas, PAGE_WIDTH*0.05, PAGE_HEIGHT*0.92)
         else:
-            self.canvas.drawCentredString(PAGE_WIDTH/2.0, PAGE_HEIGHT*0.92, title)
-            self.canvas.setTitle(title)
+            self.canvas.drawCentredString(PAGE_WIDTH/2.0, PAGE_HEIGHT*0.92, self.title)
+            self.canvas.setTitle(self.title)
             self.canvas.restoreState()
 
     def drawLogo(self, name="V&A logo.png"):
@@ -112,7 +184,7 @@ class ColouringObject(object):
         self.canvas.drawImage(name, PAGE_WIDTH*0.8, PAGE_HEIGHT*0.9, mask='auto')
         self.canvas.restoreState()
 
-    def drawFooter(self, footer="V&A Colouring-In is a product of V&A Digital Media. Over 500,000 objects to colour"):
+    def drawFooter(self, footer="V&A Colouring-In is a product of V&A Digital Media. Over 500,000 objects to colour. Gotta colour them all"):
         self.canvas.saveState()
         self.canvas.setFont('Times-Italic', 10)
         self.canvas.drawCentredString(PAGE_WIDTH/2.0, PAGE_HEIGHT*0.05, footer)
@@ -124,14 +196,14 @@ class ColouringObject(object):
         pass
 
     def drawMetadata(self):
-        data = [('Artist', 'Unknown'), ('Made', 'Meaux'), ('Date', 'C10th')]
-        table = Table(data, colWidths=50, rowHeights=25)
+        data = [('Artist', self.artist), ('Made', self.place), ('Date', self.date)]
+        table = Table(data, colWidths=75, rowHeights=25)
         table.setStyle(TableStyle([
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.black),
             ('BOX', (0,0), (-1,-1), 0.25, colors.black),
         ]))
         table.wrapOn(self.canvas, 0, 0)
-        table.drawOn(self.canvas, PAGE_WIDTH*0.72, PAGE_HEIGHT*0.7)
+        table.drawOn(self.canvas, PAGE_WIDTH*0.72, PAGE_HEIGHT*0.45)
 
     def drawLocation(self):
 # TODO - Come Visit Me! I am in the ... Gallery, Room X, Case X
@@ -153,13 +225,15 @@ class ColouringObject(object):
 # Return PDF
 
 if __name__ == "__main__":
-    col = ColouringObject(obj="O122080")
+    col = ColouringObject(obj="O55927")
+    col.getData()
+    col.edgeImage()
+    col.drawImage()
+
     col.drawLogo("./V&A logo-80x47.png")
     col.drawTitle()
     col.drawPAD()
     col.drawFooter()
     col.drawMetadata()
-    col.edgeImage(name="2006BA0296.jpg")
-    col.drawImage()
     col.save()
 
