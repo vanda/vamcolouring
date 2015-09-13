@@ -105,11 +105,12 @@ class ColouringObject(object):
         cv2.bitwise_not(edge_img, edge_img)
         cv2.imwrite("edge-" + self.obj + ".png", edge_img)
 # TODO do this in memory - can't pass it to reportlab though ?
-#        self.alpha_img = StringIO(str(cv2.imencode('.png', edge_img)[1]))
+        alpha = StringIO(str(cv2.imencode('.png', edge_img)[1]))
 #        invert_img = None
-#        l = edge_img[:, :]
-#        self.alpha_img = cv2.merge((l, l, l, l))
-#        cv2.imwrite("edge-" + name, alpha_img)
+        l = edge_img[:, :]
+        print("Got alpha: %s" % alpha)
+#        self.alpha_img = cv2.merge((l, l, l, alpha))
+#        cv2.imwrite("edge-" + name, self.alpha_img, -1)
 #        self.image = "edge-" + name
 
     def drawImage(self):
@@ -118,27 +119,34 @@ class ColouringObject(object):
         if((self.width > self.height) or (abs(self.width-self.height) < 150)):
 # Rectangular / Landscape
             print("Landscape")
-            self.orientation = 'L'
-            scale_width = self.width * 0.7
-            scale_height = self.height * 0.7
-            self.canvas.drawImage("edge-" + self.obj + ".png", PAGE_WIDTH*0.05, PAGE_HEIGHT*0.45, width=scale_width, height=scale_height)
-        else:
             print("Width: %d Height %d" % (self.width, self.height))
+            self.orientation = 'L'
+            scale_width = self.width * 0.65
+            scale_height = self.height * 0.65
+            self.canvas.drawImage("edge-" + self.obj + ".png", PAGE_WIDTH*0.05, PAGE_HEIGHT*0.30, width=scale_width, height=scale_height, mask='auto', preserveAspectRatio=True)
+        else:
+            print("Portrait")
+            print("Width: %d Height %d" % (self.width, self.height))
+            self.orientation = 'P'
 # Portrait
             scale = self.height / float(PAGE_HEIGHT*0.7)
             scale_width = (self.width * 0.5)
             scale_height = PAGE_HEIGHT*0.5
-            self.canvas.drawImage("edge-" + self.obj + ".png", PAGE_WIDTH*0.1, PAGE_HEIGHT*0.2, width=(self.width * 0.5), height=PAGE_HEIGHT*0.5)
+            self.canvas.drawImage("edge-" + self.obj + ".png", PAGE_WIDTH*0.1, PAGE_HEIGHT*0.2, width=(self.width * 0.5), height=PAGE_HEIGHT*0.7, mask='auto', preserveAspectRatio=True)
         self.canvas.restoreState()
 
     def drawPAD(self, pad=None, historical=None):
 # TODO - Choose PAD or other description. Limit length. Longer if image small
         if self.pad:
             pad_text = self.pad
+        else:
+            pad_text = ''
         if self.historical_context_note:
             hist_text = self.historical_context_note
         else:
             hist_text = None
+        if self.descriptive_line:
+            desc_text = self.descriptive_line
 
         parastyle = ParagraphStyle('pad')
         parastyle.textColor = 'black'
@@ -149,12 +157,23 @@ class ColouringObject(object):
 #        self.canvas.drawString(PAGE_WIDTH*0.1, PAGE_HEIGHT*0.1, pad)
 #        self.canvas.restoreState()
 #        paragraph.WrapOn(self.canvas, 
-        paragraph.wrapOn(self.canvas, PAGE_WIDTH*0.9, PAGE_HEIGHT*0.1)
-        paragraph.drawOn(self.canvas, PAGE_WIDTH*0.05, PAGE_HEIGHT*0.35)
+        if self.orientation == 'L':
+            paragraph.wrapOn(self.canvas, PAGE_WIDTH*0.9, PAGE_HEIGHT*0.1)
+            paragraph.drawOn(self.canvas, PAGE_WIDTH*0.05, PAGE_HEIGHT*0.35)
+        else:
+            paragraph.wrapOn(self.canvas, PAGE_WIDTH*0.28, PAGE_HEIGHT*0.6)
+            paragraph.drawOn(self.canvas, PAGE_WIDTH*0.68, PAGE_HEIGHT*0.15)
+
         if hist_text:
             parahist = Paragraph(hist_text, parastyle)
             parahist.wrapOn(self.canvas, PAGE_WIDTH*0.9, PAGE_HEIGHT*0.2)
             parahist.drawOn(self.canvas, PAGE_WIDTH*0.05, PAGE_HEIGHT*0.1)
+
+        if desc_text:
+            paradesc = Paragraph(desc_text, parastyle)
+            if self.orientation == 'L':
+                paradesc.wrapOn(self.canvas, PAGE_WIDTH*0.9, PAGE_HEIGHT*0.2)
+                paradesc.drawOn(self.canvas, PAGE_WIDTH*0.05, PAGE_HEIGHT*0.1)
 
     def drawTitle(self):
 # Todo - max length / multilines. Use descriptive line if no title attrib
@@ -162,7 +181,7 @@ class ColouringObject(object):
         self.canvas.setFont('Times-Bold', 12)
         if self.title == '':
             self.title = self.descriptive_line
-        if len(self.title) > 32:
+        if len(self.title) > 60:
             parastyle = ParagraphStyle('pad')
             parastyle.textColor = 'black'
             parastyle.fontSize = 12
@@ -175,13 +194,13 @@ class ColouringObject(object):
             self.canvas.setTitle(self.title)
             self.canvas.restoreState()
 
-    def drawLogo(self, name="V&A logo.png"):
+    def drawLogo(self, name="V&A-logo.png"):
 #        print("Logo is %s" % getImageData(name)[0])
         self.canvas.saveState()
         logo = ImageReader(name)
 #        parts.append(Image(name))
 #        print("Logo is %s" % logo)
-        self.canvas.drawImage(name, PAGE_WIDTH*0.8, PAGE_HEIGHT*0.9, mask='auto')
+        self.canvas.drawImage(name, PAGE_WIDTH*0.8, PAGE_HEIGHT*0.9, mask='auto', width=PAGE_WIDTH*0.1, preserveAspectRatio=True)
         self.canvas.restoreState()
 
     def drawFooter(self, footer="V&A Colouring-In is a product of V&A Digital Media. Over 500,000 objects to colour. Gotta colour them all"):
@@ -202,8 +221,12 @@ class ColouringObject(object):
             ('INNERGRID', (0,0), (-1,-1), 0.25, colors.black),
             ('BOX', (0,0), (-1,-1), 0.25, colors.black),
         ]))
-        table.wrapOn(self.canvas, 0, 0)
-        table.drawOn(self.canvas, PAGE_WIDTH*0.72, PAGE_HEIGHT*0.45)
+        if self.orientation == 'L':
+            table.wrapOn(self.canvas, PAGE_WIDTH*0.15, PAGE_HEIGHT*0.18)
+            table.drawOn(self.canvas, PAGE_WIDTH*0.05, PAGE_HEIGHT*0.20)
+        else:
+            table.wrapOn(self.canvas, 0, 0)
+            table.drawOn(self.canvas, PAGE_WIDTH*0.68, PAGE_HEIGHT*0.78)
 
     def drawLocation(self):
 # TODO - Come Visit Me! I am in the ... Gallery, Room X, Case X
@@ -225,12 +248,12 @@ class ColouringObject(object):
 # Return PDF
 
 if __name__ == "__main__":
-    col = ColouringObject(obj="O55927")
+    col = ColouringObject(obj="O17543")
     col.getData()
     col.edgeImage()
     col.drawImage()
 
-    col.drawLogo("./V&A logo-80x47.png")
+    col.drawLogo()
     col.drawTitle()
     col.drawPAD()
     col.drawFooter()
