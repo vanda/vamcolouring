@@ -116,7 +116,7 @@ class ColouringObject(object):
     def drawImage(self):
         self.canvas.saveState()
 # TODO make
-        if((self.width > self.height) or (abs(self.width-self.height) < 150)):
+        if((self.width > self.height) or (abs(self.width-self.height) < 100)):
 # Rectangular / Landscape
             print("Landscape")
             print("Width: %d Height %d" % (self.width, self.height))
@@ -147,6 +147,8 @@ class ColouringObject(object):
             hist_text = None
         if self.descriptive_line:
             desc_text = self.descriptive_line
+        else:
+            desc_text = None
 
         parastyle = ParagraphStyle('pad')
         parastyle.textColor = 'black'
@@ -248,7 +250,7 @@ class ColouringObject(object):
 # Return PDF
 
 if __name__ == "__main__":
-    col = ColouringObject(obj="O17543")
+    col = ColouringObject(obj="O84915")
     col.getData()
     col.edgeImage()
     col.drawImage()
