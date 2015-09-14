@@ -7,6 +7,8 @@ from reportlab.pdfgen import canvas
 from reportlab.rl_config import defaultPageSize
 from reportlab.lib.units import inch
 from reportlab.lib.utils import ImageReader, getImageData
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from io import StringIO
 import numpy
 import cv2
@@ -58,12 +60,19 @@ class ColouringObject(object):
     parts = []
     orientation = 'P'
 
-    def __init__(self, obj="O122080", orientation="PORTRAIT"):
+    def __init__(self, obj="O122080", orientation="PORTRAIT", font=""):
             # TODO get data for obj
             self.canvas = canvas.Canvas("%s-colouring.pdf" % obj, pagesize=A4)
             self.obj = obj
 
-            # self.canvas.setFont( V&A Font)
+            self.loadFont(font)
+
+
+    def loadFont(self, font):
+        ttf = pdfmetrics.registerFont(TTFont("TheSans", font))
+        ttf = pdfmetrics.registerFont(TTFont("TheSans-Bold", "TheSans_LP_700_Bold.ttf", subfontIndex=1))
+        ttf = pdfmetrics.registerFont(TTFont("TheSans-Light", "TheSans_LP_200_ExtraLight.ttf", subfontIndex=2))
+        pdfmetrics.registerFontFamily("TheSans", normal="TheSans", bold="TheSans-Bold", italic="TheSans-Light")
 
     def getData(self):
         obj_url = vam_api + self.obj
@@ -123,7 +132,7 @@ class ColouringObject(object):
             self.orientation = 'L'
             scale_width = self.width * 0.65
             scale_height = self.height * 0.65
-            self.canvas.drawImage("edge-" + self.obj + ".png", PAGE_WIDTH*0.05, PAGE_HEIGHT*0.30, width=scale_width, height=scale_height, mask='auto', preserveAspectRatio=True)
+            self.canvas.drawImage("edge-" + self.obj + ".png", PAGE_WIDTH*0.05, PAGE_HEIGHT*0.45, width=scale_width, height=scale_height, mask='auto', preserveAspectRatio=True)
         else:
             print("Portrait")
             print("Width: %d Height %d" % (self.width, self.height))
@@ -153,23 +162,38 @@ class ColouringObject(object):
         parastyle = ParagraphStyle('pad')
         parastyle.textColor = 'black'
         parastyle.fontSize = 10
+        parastyle.fontName = "TheSans"
         paragraph = Paragraph(pad_text, parastyle)
 #        self.canvas.saveState()
 #        self.canvas.setFont('Times-Bold', 12)
 #        self.canvas.drawString(PAGE_WIDTH*0.1, PAGE_HEIGHT*0.1, pad)
 #        self.canvas.restoreState()
 #        paragraph.WrapOn(self.canvas, 
+        print("Public Access Text: %s", pad_text)
         if self.orientation == 'L':
             paragraph.wrapOn(self.canvas, PAGE_WIDTH*0.9, PAGE_HEIGHT*0.1)
             paragraph.drawOn(self.canvas, PAGE_WIDTH*0.05, PAGE_HEIGHT*0.35)
         else:
             paragraph.wrapOn(self.canvas, PAGE_WIDTH*0.28, PAGE_HEIGHT*0.6)
-            paragraph.drawOn(self.canvas, PAGE_WIDTH*0.68, PAGE_HEIGHT*0.15)
+            paragraph.drawOn(self.canvas, PAGE_WIDTH*0.68, PAGE_HEIGHT*0.35)
 
         if hist_text:
+            print("Historical Text: %s", hist_text)
             parahist = Paragraph(hist_text, parastyle)
-            parahist.wrapOn(self.canvas, PAGE_WIDTH*0.9, PAGE_HEIGHT*0.2)
-            parahist.drawOn(self.canvas, PAGE_WIDTH*0.05, PAGE_HEIGHT*0.1)
+            if self.orientation == 'L':
+                if pad_text == '':
+                    parahist.wrapOn(self.canvas, PAGE_WIDTH*0.9, PAGE_HEIGHT*0.1)
+                    parahist.drawOn(self.canvas, PAGE_WIDTH*0.05, PAGE_HEIGHT*0.35)
+                else:
+                    parahist.wrapOn(self.canvas, PAGE_WIDTH*0.9, PAGE_HEIGHT*0.2)
+                    parahist.drawOn(self.canvas, PAGE_WIDTH*0.05, PAGE_HEIGHT*0.1)
+            else:
+                if pad_text == '':
+                    paragraph.wrapOn(self.canvas, PAGE_WIDTH*0.28, PAGE_HEIGHT*0.3)
+                    paragraph.drawOn(self.canvas, PAGE_WIDTH*0.68, PAGE_HEIGHT*0.15)
+                else:
+                    paragraph.wrapOn(self.canvas, PAGE_WIDTH*0.28, PAGE_HEIGHT*0.3)
+                    paragraph.drawOn(self.canvas, PAGE_WIDTH*0.68, PAGE_HEIGHT*0.55)
 
         if desc_text:
             paradesc = Paragraph(desc_text, parastyle)
@@ -180,9 +204,16 @@ class ColouringObject(object):
     def drawTitle(self):
 # Todo - max length / multilines. Use descriptive line if no title attrib
         self.canvas.saveState()
-        self.canvas.setFont('Times-Bold', 12)
+        self.canvas.setFont('TheSans', 24)
         if self.title == '':
-            self.title = self.descriptive_line
+            if self.descriptive_line:
+                self.title = self.descriptive_line
+            elif self.object:
+                self.title = self.object
+            else:
+                self.title = "Untitled Object"
+
+        print("Title is " + self.title)
         if len(self.title) > 60:
             parastyle = ParagraphStyle('pad')
             parastyle.textColor = 'black'
@@ -202,7 +233,7 @@ class ColouringObject(object):
         logo = ImageReader(name)
 #        parts.append(Image(name))
 #        print("Logo is %s" % logo)
-        self.canvas.drawImage(name, PAGE_WIDTH*0.8, PAGE_HEIGHT*0.9, mask='auto', width=PAGE_WIDTH*0.1, preserveAspectRatio=True)
+        self.canvas.drawImage(name, PAGE_WIDTH*0.8, PAGE_HEIGHT*0.9, mask='auto', width=PAGE_WIDTH*0.1, height=PAGE_WIDTH*0.1, preserveAspectRatio=True)
         self.canvas.restoreState()
 
     def drawFooter(self, footer="V&A Colouring-In is a product of V&A Digital Media. Over 500,000 objects to colour. Gotta colour them all"):
@@ -250,7 +281,7 @@ class ColouringObject(object):
 # Return PDF
 
 if __name__ == "__main__":
-    col = ColouringObject(obj="O84915")
+    col = ColouringObject(obj="O9138", font="TheSans_LP_500_Regular.ttf")
     col.getData()
     col.edgeImage()
     col.drawImage()
