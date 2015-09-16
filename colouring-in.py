@@ -1,7 +1,7 @@
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, TableStyle
 from reportlab.platypus.tables import Table
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib import colors
 from reportlab.pdfgen import canvas
 from reportlab.rl_config import defaultPageSize
@@ -62,7 +62,7 @@ class ColouringObject(object):
 
     def __init__(self, obj="O122080", orientation="PORTRAIT", font=""):
             # TODO get data for obj
-            self.canvas = canvas.Canvas("%s-colouring.pdf" % obj, pagesize=A4)
+            self.canvas = canvas.Canvas("%s-colouring.pdf" % obj, pagesize=landscape(A4))
             self.obj = obj
 
             self.loadFont(font)
@@ -125,23 +125,10 @@ class ColouringObject(object):
     def drawImage(self):
         self.canvas.saveState()
 # TODO make
-        if((self.width > self.height) or (abs(self.width-self.height) < 100)):
-# Rectangular / Landscape
-            print("Landscape")
-            print("Width: %d Height %d" % (self.width, self.height))
-            self.orientation = 'L'
-            scale_width = self.width * 0.65
-            scale_height = self.height * 0.65
-            self.canvas.drawImage("edge-" + self.obj + ".png", PAGE_WIDTH*0.05, PAGE_HEIGHT*0.45, width=scale_width, height=scale_height, mask='auto', preserveAspectRatio=True)
-        else:
-            print("Portrait")
-            print("Width: %d Height %d" % (self.width, self.height))
-            self.orientation = 'P'
-# Portrait
-            scale = self.height / float(PAGE_HEIGHT*0.7)
-            scale_width = (self.width * 0.5)
-            scale_height = PAGE_HEIGHT*0.5
-            self.canvas.drawImage("edge-" + self.obj + ".png", PAGE_WIDTH*0.1, PAGE_HEIGHT*0.2, width=(self.width * 0.5), height=PAGE_HEIGHT*0.7, mask='auto', preserveAspectRatio=True)
+        print("Width: %d Height %d" % (self.width, self.height))
+        scale_width = self.width * 0.65
+        scale_height = self.height * 0.65
+        self.canvas.drawImage("edge-" + self.obj + ".png", PAGE_WIDTH*0.05, PAGE_HEIGHT*0.15, width=scale_width, height=scale_height, mask='auto', preserveAspectRatio=True)
         self.canvas.restoreState()
 
     def drawPAD(self, pad=None, historical=None):
@@ -161,7 +148,8 @@ class ColouringObject(object):
 
         parastyle = ParagraphStyle('pad')
         parastyle.textColor = 'black'
-        parastyle.fontSize = 10
+        parastyle.fontSize = 12
+        parastyle.leading = 20
         parastyle.fontName = "TheSans"
         paragraph = Paragraph(pad_text, parastyle)
 #        self.canvas.saveState()
@@ -170,12 +158,8 @@ class ColouringObject(object):
 #        self.canvas.restoreState()
 #        paragraph.WrapOn(self.canvas, 
         print("Public Access Text: %s", pad_text)
-        if self.orientation == 'L':
-            paragraph.wrapOn(self.canvas, PAGE_WIDTH*0.9, PAGE_HEIGHT*0.1)
-            paragraph.drawOn(self.canvas, PAGE_WIDTH*0.05, PAGE_HEIGHT*0.35)
-        else:
-            paragraph.wrapOn(self.canvas, PAGE_WIDTH*0.28, PAGE_HEIGHT*0.6)
-            paragraph.drawOn(self.canvas, PAGE_WIDTH*0.68, PAGE_HEIGHT*0.35)
+        paragraph.wrapOn(self.canvas, PAGE_WIDTH*0.45, PAGE_HEIGHT*0.8)
+        paragraph.drawOn(self.canvas, PAGE_WIDTH*0.90, PAGE_HEIGHT*0.1)
 
         if hist_text:
             print("Historical Text: %s", hist_text)
@@ -204,7 +188,7 @@ class ColouringObject(object):
     def drawTitle(self):
 # Todo - max length / multilines. Use descriptive line if no title attrib
         self.canvas.saveState()
-        self.canvas.setFont('TheSans', 24)
+        self.canvas.setFont('TheSans-Bold', 16)
         if self.title == '':
             if self.descriptive_line:
                 self.title = self.descriptive_line
@@ -218,12 +202,12 @@ class ColouringObject(object):
             parastyle = ParagraphStyle('pad')
             parastyle.textColor = 'black'
             parastyle.fontSize = 12
-            parastyle.font = 'Times-Bold'
+            parastyle.font = 'TheSans-Bold'
             paragraph = Paragraph(self.title, parastyle)
             paragraph.wrapOn(self.canvas, PAGE_WIDTH*0.75, PAGE_HEIGHT*0.75)
             paragraph.drawOn(self.canvas, PAGE_WIDTH*0.05, PAGE_HEIGHT*0.92)
         else:
-            self.canvas.drawCentredString(PAGE_WIDTH/2.0, PAGE_HEIGHT*0.92, self.title)
+            self.canvas.drawString(PAGE_HEIGHT*0.635, PAGE_WIDTH*0.9, self.title)
             self.canvas.setTitle(self.title)
             self.canvas.restoreState()
 
@@ -233,13 +217,18 @@ class ColouringObject(object):
         logo = ImageReader(name)
 #        parts.append(Image(name))
 #        print("Logo is %s" % logo)
-        self.canvas.drawImage(name, PAGE_WIDTH*0.8, PAGE_HEIGHT*0.9, mask='auto', width=PAGE_WIDTH*0.1, height=PAGE_WIDTH*0.1, preserveAspectRatio=True)
+        self.canvas.drawImage(name, PAGE_HEIGHT*0.9, PAGE_WIDTH*0.85, mask='auto', width=PAGE_WIDTH*0.1, height=PAGE_WIDTH*0.1, preserveAspectRatio=True)
         self.canvas.restoreState()
 
-    def drawFooter(self, footer="V&A Colouring-In is a product of V&A Digital Media. Over 500,000 objects to colour. Gotta colour them all"):
+    def drawFooter(self, footer=""):
         self.canvas.saveState()
-        self.canvas.setFont('Times-Italic', 10)
-        self.canvas.drawCentredString(PAGE_WIDTH/2.0, PAGE_HEIGHT*0.05, footer)
+        self.canvas.setFont('TheSans', 12)
+        self.canvas.drawString(PAGE_WIDTH*0.9, PAGE_HEIGHT*0.04, "Find out more at")
+
+        self.canvas.drawString(PAGE_HEIGHT*0.743, PAGE_WIDTH*0.055, "collections.vam.ac.uk/item/%s" % self.obj)
+
+        self.canvas.linkURL("http://collections.vam.ac.uk/item/%s" % self.obj, (PAGE_HEIGHT*0.743, PAGE_WIDTH*0.055, PAGE_HEIGHT, PAGE_WIDTH*0.1), relative=0)
+        self.canvas.drawString(PAGE_WIDTH*0.9, PAGE_HEIGHT*0.02, "Visit me in the Museum. I am in Gallery ...")
         self.canvas.restoreState()
 
         pass
@@ -249,17 +238,18 @@ class ColouringObject(object):
 
     def drawMetadata(self):
         data = [('Artist', self.artist), ('Made', self.place), ('Date', self.date)]
-        table = Table(data, colWidths=75, rowHeights=25)
-        table.setStyle(TableStyle([
-            ('INNERGRID', (0,0), (-1,-1), 0.25, colors.black),
-            ('BOX', (0,0), (-1,-1), 0.25, colors.black),
-        ]))
-        if self.orientation == 'L':
-            table.wrapOn(self.canvas, PAGE_WIDTH*0.15, PAGE_HEIGHT*0.18)
-            table.drawOn(self.canvas, PAGE_WIDTH*0.05, PAGE_HEIGHT*0.20)
-        else:
-            table.wrapOn(self.canvas, 0, 0)
-            table.drawOn(self.canvas, PAGE_WIDTH*0.68, PAGE_HEIGHT*0.78)
+        data = self.artist + ", " + self.date + ", " + self.place
+#        self.canvas.setFont('TheSans', 12)
+#        self.canvas.drawString(PAGE_HEIGHT*0.635, PAGE_WIDTH*0.86, data)
+
+        parastyle = ParagraphStyle('pad')
+        parastyle.textColor = 'black'
+        parastyle.fontSize = 12
+        parastyle.leading = 20
+        parastyle.font = 'TheSans-Bold'
+        paragraph = Paragraph(data, parastyle)
+        paragraph.wrapOn(self.canvas, PAGE_HEIGHT*0.25, PAGE_WIDTH*0.1)
+        paragraph.drawOn(self.canvas, PAGE_HEIGHT*0.635, PAGE_WIDTH*0.82)
 
     def drawLocation(self):
 # TODO - Come Visit Me! I am in the ... Gallery, Room X, Case X
@@ -272,6 +262,14 @@ class ColouringObject(object):
 
     def drawBiblio():
         pass
+
+    def drawLines(self):
+        self.canvas.setLineWidth(.5)
+# Divider
+        self.canvas.line(PAGE_HEIGHT*0.62, PAGE_WIDTH*0.02, PAGE_HEIGHT*0.62, PAGE_WIDTH*0.95)
+# Title separator
+        self.canvas.line(PAGE_HEIGHT*0.635, PAGE_WIDTH*0.82, PAGE_HEIGHT*0.98, PAGE_WIDTH*0.82)
+
 
 # Given Object id:
 # Request JSON
@@ -287,6 +285,7 @@ if __name__ == "__main__":
     col.drawImage()
 
     col.drawLogo()
+    col.drawLines()
     col.drawTitle()
     col.drawPAD()
     col.drawFooter()
