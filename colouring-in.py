@@ -2,7 +2,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, TableStyle
 from reportlab.platypus.tables import Table
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.pagesizes import A4, landscape
-from reportlab.lib import colors
+from reportlab.lib import colors, utils
 from reportlab.pdfgen import canvas
 from reportlab.rl_config import defaultPageSize
 from reportlab.lib.units import inch
@@ -49,6 +49,7 @@ def strip_tags(html):
 
 def get_image_aspect(img):
     h, w = img.shape[:2]
+#    print("Image Height: %d Width: %d") % (h, w)
     aspect = h / float(w)
     return (w, h, aspect)
 
@@ -124,10 +125,21 @@ class ColouringObject(object):
 
     def drawImage(self):
         self.canvas.saveState()
+       # img_path = "edge-" + self.obj + ".png"
+       # img = utils.ImageReader(img_path)
+       # iw, ih = img.getSize()
 # TODO make
         print("Width: %d Height %d" % (self.width, self.height))
-        scale_width = self.width * 0.75
-        scale_height = self.height * 0.75
+        if self.width <= PAGE_WIDTH*0.65:
+            scale_width = self.width
+        else:
+            scale_width = PAGE_WIDTH*0.65
+        if self.height <= PAGE_HEIGHT*0.95:
+            scale_height = self.height
+        else:
+            scale_height = PAGE_HEIGHT*0.95
+#        scale_width = self.width * 0.75
+#        scale_height = self.height * 0.75
         self.canvas.drawImage("edge-" + self.obj + ".png", PAGE_HEIGHT*0.1, PAGE_WIDTH*0.05, width=scale_width, height=scale_height, mask='auto', preserveAspectRatio=True)
         self.canvas.restoreState()
 
@@ -164,7 +176,7 @@ class ColouringObject(object):
     def drawTitle(self):
 # Todo - max length / multilines. Use descriptive line if no title attrib
         self.canvas.saveState()
-        self.canvas.setFont('TheSans-Bold', 16)
+        self.canvas.setFont('TheSans-Bold', 14)
         if self.title == '':
             if self.descriptive_line:
                 self.title = self.descriptive_line
@@ -222,7 +234,7 @@ class ColouringObject(object):
 
         parastyle = ParagraphStyle('pad')
         parastyle.textColor = 'black'
-        parastyle.fontSize = 12
+        parastyle.fontSize = 10
         parastyle.leading = 20
         parastyle.font = 'TheSans-Bold'
         paragraph = Paragraph(data, parastyle)
@@ -257,7 +269,7 @@ class ColouringObject(object):
 # Return PDF
 
 if __name__ == "__main__":
-    col = ColouringObject(obj="O78889", font="TheSans_LP_500_Regular.ttf")
+    col = ColouringObject(obj="O77828", font="TheSans_LP_500_Regular.ttf")
     col.getData()
     col.edgeImage()
     col.drawImage()
