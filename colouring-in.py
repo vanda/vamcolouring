@@ -86,6 +86,7 @@ class ColouringObject(object):
         self.place = data[0]['fields']['place']
         self.artist = data[0]['fields']['artist']
         self.object = data[0]['fields']['object']
+        self.location = data[0]['fields']['location']
         self.pad = data[0]['fields']['public_access_description']
         self.primary_image = data[0]['fields']['primary_image_id']
         self.date = data[0]['fields']['date_text']
@@ -158,20 +159,31 @@ class ColouringObject(object):
         else:
             desc_text = None
 
+        if len(pad_text) > 1000:
+            pad_text_short = pad_text[0:1000]
+            i = 0
+            while i < 100:
+                if pad_text[1000+i] == "." or pad_text[1000+i] == "?":
+                    break
+                i += 1
+            pad_text_short = pad_text_short + pad_text[1000:1000+i+1] + "[...]"
+        else:
+            pad_text_short = pad_text
+
         parastyle = ParagraphStyle('pad')
         parastyle.textColor = 'black'
         parastyle.fontSize = 12
         parastyle.leading = 20
         parastyle.fontName = "TheSans"
-        paragraph = Paragraph(pad_text, parastyle)
+        paragraph = Paragraph(pad_text_short, parastyle)
 #        self.canvas.saveState()
 #        self.canvas.setFont('Times-Bold', 12)
 #        self.canvas.drawString(PAGE_WIDTH*0.1, PAGE_HEIGHT*0.1, pad)
 #        self.canvas.restoreState()
 #        paragraph.WrapOn(self.canvas, 
         print("Public Access Text: %s", pad_text)
-        paragraph.wrapOn(self.canvas, PAGE_HEIGHT*0.35, PAGE_WIDTH*0.7)
-        paragraph.drawOn(self.canvas, PAGE_HEIGHT*0.635, PAGE_WIDTH*0.15)
+        paragraph.wrapOn(self.canvas, PAGE_HEIGHT*0.35, PAGE_WIDTH*0.78)
+        paragraph.drawOn(self.canvas, PAGE_HEIGHT*0.635, PAGE_WIDTH*0.12)
 
     def drawTitle(self):
 # Todo - max length / multilines. Use descriptive line if no title attrib
@@ -218,7 +230,7 @@ class ColouringObject(object):
         self.canvas.drawString(PAGE_HEIGHT*0.743, PAGE_WIDTH*0.0565, "collections.vam.ac.uk/item/%s" % self.obj)
 
         self.canvas.linkURL("http://collections.vam.ac.uk/item/%s" % self.obj, (PAGE_HEIGHT*0.743, PAGE_WIDTH*0.055, PAGE_HEIGHT, PAGE_WIDTH*0.1), relative=0)
-        self.canvas.drawString(PAGE_WIDTH*0.9, PAGE_HEIGHT*0.02, "Visit me in the Museum. I am in Gallery ...")
+        self.canvas.drawString(PAGE_WIDTH*0.9, PAGE_HEIGHT*0.02, "Visit me at the Museum. Find me in " + self.location)
         self.canvas.restoreState()
 
         pass
@@ -269,7 +281,7 @@ class ColouringObject(object):
 # Return PDF
 
 if __name__ == "__main__":
-    col = ColouringObject(obj="O77828", font="TheSans_LP_500_Regular.ttf")
+    col = ColouringObject(obj="O85932", font="TheSans_LP_500_Regular.ttf")
     col.getData()
     col.edgeImage()
     col.drawImage()
